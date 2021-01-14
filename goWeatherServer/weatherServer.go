@@ -60,7 +60,7 @@ func GetTemperature(r *http.Request) (float64, string) {
 	client := &http.Client{}
 	respWeather, err := client.Do(reqWeather)
     if err != nil {
-		// log.Fatal( openWeatherApiUrl + " returned an error: " + err.Error())
+		log.Println( openWeatherApiUrl + " returned an error: " + err.Error())
         return 0, openWeatherApiUrl + " returned an error"
     }
 	defer respWeather.Body.Close()
@@ -71,7 +71,7 @@ func GetTemperature(r *http.Request) (float64, string) {
 
 	json.Unmarshal(bodyWeather, &result)
 	if result == nil {
-		// log.Fatal(openWeatherApiUrl + " returned an empty response")
+		log.Println(openWeatherApiUrl + " returned an empty response")
 		return 0, openWeatherApiUrl + " returned an empty response"
 	}
 
@@ -90,7 +90,7 @@ func GetCoord(r *http.Request) (string, string, string) {
 	clientIp := r.Header.Get("X-FORWARDED-FOR")
 
 	if clientIp == "" {
-		// log.Fatal("Forwarded header not found")
+		log.Println("Forwarded header not found")
 		return "0", "0", "Could not identify the client's IP"
 	}
 
@@ -103,14 +103,14 @@ func GetCoord(r *http.Request) (string, string, string) {
 	respLatLong, err := client.Do(reqLatLong)
 	
     if err != nil {
-        // log.Fatal(ipApiUrl + " returned an error " + err.Error())
+        log.Println(ipApiUrl + " returned an error " + err.Error())
 		return "0", "0", ipApiUrl + " returned an error"
     }
 	defer respLatLong.Body.Close()
 	
 	if respLatLong.StatusCode != 200 {
 		bodyLatLong, _ := ioutil.ReadAll(respLatLong.Body)
-		// log.Fatalf("%s returned a status code %d %s", ipApiUrl, respLatLong.StatusCode, string(bodyLatLong))
+		log.Printf("%s returned a status code %d %s", ipApiUrl, respLatLong.StatusCode, string(bodyLatLong))
 		return "0", "0", fmt.Sprintf("%s returned a status code %d %s", ipApiUrl, respLatLong.StatusCode, string(bodyLatLong))
 	}
 	
