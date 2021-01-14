@@ -6,7 +6,7 @@ goWeatherClient посылает запросы на goWeatherServer и возв
 
 В терминале:
 
-export OPENWEATHER_API_KEY=<Your API key>
+export OPENWEATHER_API_KEY=\<Your API key\>
 
 В терминале:
 
