@@ -97,6 +97,15 @@ func GetTemperature(r *http.Request) (float64, string) {
 // Requires X-FORWARDED-FOR header to be set to the IP address in question
 func GetCoord(r *http.Request) (string, string, string) {
 
+	clientIp := r.Header.Get("X-FORWARDED-FOR")
+
+	if clientIp == "" {
+		log.Println("Forwarded header not found")
+		return "0", "0", "Could not identify the client's IP"
+	}
+
+	log.Println("Client IP: " + clientIp)
+
 	var coords Coord
 
 	if os.Getenv("IPIFY_API_KEY") != "" {
@@ -105,11 +114,11 @@ func GetCoord(r *http.Request) (string, string, string) {
 		coords = new(IpApi)
 	}
 
-	return coords.GetCoord(r)
+	return coords.GetCoord(clientIp)
 }
 
 type Coord interface {
-	GetCoord(r *http.Request) (string, string, string)
+	GetCoord(clientIp string) (string, string, string)
 }
 
 type IpApi struct { // throws RateLimited error all too often on a free plan
@@ -120,16 +129,8 @@ type Ipify struct { // 1000 requests per month on free subscription. Requires en
 
 // Returns latitude and longitude of the client's IP address
 // Requires X-FORWARDED-FOR header to be set to the IP address in question
-func (coord IpApi) GetCoord(r *http.Request) (string, string, string) {
-	clientIp := r.Header.Get("X-FORWARDED-FOR")
-
-	if clientIp == "" {
-		log.Println("Forwarded header not found")
-		return "0", "0", "Could not identify the client's IP"
-	}
-
-	log.Println("Client IP: " + clientIp)
-
+func (coord IpApi) GetCoord(clientIp string) (string, string, string) {
+	
 	ipApiUrl := "https://ipapi.co/" + string(clientIp) + "/latlong/" // throws RateLimited error all too often on a free plan
 
 	reqLatLong, err := http.NewRequest("GET", ipApiUrl, nil)
@@ -158,16 +159,8 @@ func (coord IpApi) GetCoord(r *http.Request) (string, string, string) {
 // Returns latitude and longitude of the client's IP address
 // Requires X-FORWARDED-FOR header to be set to the IP address in question
 // Requires environment variable IPIFY_API_KEY to be set
-func (coord Ipify) GetCoord(r *http.Request) (string, string, string) {
-	clientIp := r.Header.Get("X-FORWARDED-FOR")
-
-	if clientIp == "" {
-		log.Println("Forwarded header not found")
-		return "0", "0", "Could not identify the client's IP"
-	}
-
-	log.Println("Client IP: " + clientIp)
-
+func (coord Ipify) GetCoord(clientIp string) (string, string, string) {
+	
 	ipifyApiKey := os.Getenv("IPIFY_API_KEY") // 1000 requests per month on free subscription
 	ipApiUrl := "https://geo.ipify.org/api/v1?apiKey=" + ipifyApiKey + "&ipAddress=" + string(clientIp)
 
