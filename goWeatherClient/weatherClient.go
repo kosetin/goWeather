@@ -7,13 +7,14 @@ import (
 	"io/ioutil"
 	"net/http"
 	"encoding/json"
+	"log"
 )
 
 func main() {
 
 	// Requests to a local server running on VirtualBox sent from the (same) local machine result in X-FORWARDED-FOR header set to 127.0.0.1
 	// The code below gets the IP address of the local machine and puts it into the X-FORWARDED-FOR header
-	url := "https://api.ipify.org?format=text"	// we are using a pulib IP API, we're using ipify here, below are some others
+	const url = "https://api.ipify.org?format=text"	// we are using a pulib IP API, we're using ipify here, below are some others
                                               // https://www.ipify.org
                                               // http://myexternalip.com
                                               // http://api.ident.me
@@ -28,6 +29,11 @@ func main() {
 	}
 
 	defer respIp.Body.Close()
+
+	if respIp.StatusCode != http.StatusOK {
+		log.Printf("%s returned a status code %d", url, respIp.StatusCode)
+		return
+	}
 
 	ip, err := ioutil.ReadAll(respIp.Body)
 

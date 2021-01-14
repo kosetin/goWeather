@@ -54,7 +54,12 @@ func GetTemperature(r *http.Request) (float64, string) {
 	}
 
 	apiKey := os.Getenv("OPENWEATHER_API_KEY")
-	openWeatherApiUrl := "http://api.openweathermap.org/data/2.5/weather"
+	if apiKey == "" {
+		log.Println( "OPENWEATHER_API_KEY is required, please set the environment variable, e.g. by running the following command in the terminal: export OPENWEATHER_API_KEY=<Your API key>")
+        return 0, "OPENWEATHER_API_KEY is missing"
+	}
+
+	const openWeatherApiUrl = "http://api.openweathermap.org/data/2.5/weather"
 	reqWeather, err := http.NewRequest("GET", openWeatherApiUrl + "?units=metric&lat=" + lat + "&lon=" + long + "&appid=" + apiKey, nil)
 
 	client := &http.Client{}
@@ -76,6 +81,11 @@ func GetTemperature(r *http.Request) (float64, string) {
 	}
 
 	main := result["main"].(map[string]interface{})
+
+	if main == nil {
+		log.Println(openWeatherApiUrl + " returned an empty response")
+		return 0, openWeatherApiUrl + " returned an empty response"
+	}
 	temp := main["temp"].(float64)
 
 	log.Printf("Temperature is %f\n", temp)
@@ -87,6 +97,30 @@ func GetTemperature(r *http.Request) (float64, string) {
 // Requires X-FORWARDED-FOR header to be set to the IP address in question
 func GetCoord(r *http.Request) (string, string, string) {
 
+	var coords Coord
+
+	if os.Getenv("IPIFY_API_KEY") != "" {
+		coords = new(Ipify)
+	} else {
+		coords = new(IpApi)
+	}
+
+	return coords.GetCoord(r)
+}
+
+type Coord interface {
+	GetCoord(r *http.Request) (string, string, string)
+}
+
+type IpApi struct { // throws RateLimited error all too often on a free plan
+}
+
+type Ipify struct { // 1000 requests per month on free subscription. Requires environment variable IPIFY_API_KEY to be set
+}
+
+// Returns latitude and longitude of the client's IP address
+// Requires X-FORWARDED-FOR header to be set to the IP address in question
+func (coord IpApi) GetCoord(r *http.Request) (string, string, string) {
 	clientIp := r.Header.Get("X-FORWARDED-FOR")
 
 	if clientIp == "" {
@@ -96,9 +130,9 @@ func GetCoord(r *http.Request) (string, string, string) {
 
 	log.Println("Client IP: " + clientIp)
 
-	ipApiUrl := "https://ipapi.co/"
+	ipApiUrl := "https://ipapi.co/" + string(clientIp) + "/latlong/" // throws RateLimited error all too often on a free plan
 
-	reqLatLong, err := http.NewRequest("GET", ipApiUrl + string(clientIp) + "/latlong/", nil)
+	reqLatLong, err := http.NewRequest("GET", ipApiUrl, nil)
     client := &http.Client{}
 	respLatLong, err := client.Do(reqLatLong)
 	
@@ -108,7 +142,7 @@ func GetCoord(r *http.Request) (string, string, string) {
     }
 	defer respLatLong.Body.Close()
 	
-	if respLatLong.StatusCode != 200 {
+	if respLatLong.StatusCode != http.StatusOK {
 		bodyLatLong, _ := ioutil.ReadAll(respLatLong.Body)
 		log.Printf("%s returned a status code %d %s", ipApiUrl, respLatLong.StatusCode, string(bodyLatLong))
 		return "0", "0", fmt.Sprintf("%s returned a status code %d %s", ipApiUrl, respLatLong.StatusCode, string(bodyLatLong))
@@ -116,8 +150,54 @@ func GetCoord(r *http.Request) (string, string, string) {
 	
 	bodyLatLong, _ := ioutil.ReadAll(respLatLong.Body)
 
-	latlong :=strings.Split(string(bodyLatLong), ",")
+	latlng :=strings.Split(string(bodyLatLong), ",")
+	log.Println("Lat, Long: " + latlng[0] + ", " + latlng[1])
+	return latlng[0], latlng[1], ""
+}
 
-	log.Println("Lat, Long: " + latlong[0] + ", " + latlong[1])
-	return latlong[0], latlong[1], ""
+// Returns latitude and longitude of the client's IP address
+// Requires X-FORWARDED-FOR header to be set to the IP address in question
+// Requires environment variable IPIFY_API_KEY to be set
+func (coord Ipify) GetCoord(r *http.Request) (string, string, string) {
+	clientIp := r.Header.Get("X-FORWARDED-FOR")
+
+	if clientIp == "" {
+		log.Println("Forwarded header not found")
+		return "0", "0", "Could not identify the client's IP"
+	}
+
+	log.Println("Client IP: " + clientIp)
+
+	ipifyApiKey := os.Getenv("IPIFY_API_KEY") // 1000 requests per month on free subscription
+	ipApiUrl := "https://geo.ipify.org/api/v1?apiKey=" + ipifyApiKey + "&ipAddress=" + string(clientIp)
+
+	reqLatLong, err := http.NewRequest("GET", ipApiUrl, nil)
+    client := &http.Client{}
+	respLatLong, err := client.Do(reqLatLong)
+	
+    if err != nil {
+        log.Println(ipApiUrl + " returned an error " + err.Error())
+		return "0", "0", ipApiUrl + " returned an error"
+    }
+	defer respLatLong.Body.Close()
+	
+	if respLatLong.StatusCode != http.StatusOK {
+		bodyLatLong, _ := ioutil.ReadAll(respLatLong.Body)
+		log.Printf("%s returned a status code %d %s", ipApiUrl, respLatLong.StatusCode, string(bodyLatLong))
+		return "0", "0", fmt.Sprintf("%s returned a status code %d %s", ipApiUrl, respLatLong.StatusCode, string(bodyLatLong))
+	}
+	
+	bodyLatLong, _ := ioutil.ReadAll(respLatLong.Body)
+
+	var result map[string]interface{}
+	json.Unmarshal(bodyLatLong, &result)
+	if result == nil {
+		log.Println(ipApiUrl + " returned an empty response")
+		return "0", "0", ipApiUrl + " returned an empty response"
+	}
+	location := result["location"].(map[string]interface{})
+	lat := fmt.Sprintf("%f", location["lat"].(float64))
+	lng := fmt.Sprintf("%f", location["lng"].(float64))
+	log.Println("Lat, Long: " + lat + ", " + lng)
+	return lat, lng, ""
 }

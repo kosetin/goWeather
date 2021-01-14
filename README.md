@@ -6,7 +6,11 @@ goWeatherClient посылает запросы на goWeatherServer и возв
 
 В терминале:
 
-export OPENWEATHER_API_KEY=\<Your API key\>
+export OPENWEATHER_API_KEY=\<Your OPENWEATHER API key\>
+
+По умолчанию, для конвертации IP адреса в географические координаты используется https://ipapi.co/, что иногда заканчивается ошибкой RateLimited. 
+
+Для использования https://geo.ipify.org/ для конвертации IP адреса в географические координаты, задайте IPIFY_API_KEY, например набрав в терминале export IPIFY_API_KEY=\<Your IPIFY API key\>
 
 В терминале:
 
